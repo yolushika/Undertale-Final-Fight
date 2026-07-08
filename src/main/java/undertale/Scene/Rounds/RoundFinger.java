@@ -1,0 +1,58 @@
+package undertale.Scene.Rounds;
+
+import undertale.GameMain.Game;
+import undertale.GameObject.Bullets.TitanFingers;
+import undertale.Texture.TextureManager;
+import undertale.UI.UIManager;
+import undertale.Utils.DifficultyManager;
+
+public class RoundFinger extends Round {
+    private int intensity;
+    private boolean spawnedFinger = false;
+    private final float edge;
+    private final float centerX;
+    private final float centerY;
+    // 0: 朝右, 1: 朝左
+    private TitanFingers[] titanFingers = new TitanFingers[2];
+
+    public RoundFinger(int intensity, long duration, long frameMoveTime, UIManager uiManager) {
+        super(duration, frameMoveTime, uiManager);
+        this.intensity = intensity;
+        this.edge = 400.0f;
+        this.centerX = Game.getWindowWidth() / 2.0f;
+        this.centerY = Game.getWindowHeight() / 2.0f;
+    }
+
+    public void onEnter() {
+        spawnedFinger = false;
+    }
+
+    @Override
+    public void updateRound(float deltaTime) {
+        if(!spawnedFinger){
+            spawnedFinger = true;
+            // 应用难度速度倍数
+            float speedMultiplier = DifficultyManager.getInstance().getBulletSpeedMultiplier();
+
+            // spawn titan fingers
+            float scale = 3.4f;
+            float randomTime = 0.3f + (float)(Math.random() * 0.6f); // +-0.3秒随机时间
+            float palmHeight = TextureManager.getInstance().getTexture("titan_palm").getHeight() * scale;
+            float palmY = Game.getWindowHeight() / 2 - palmHeight / 2;
+            float randomY = (float)(Math.random() * 6.0f) * scale;
+            titanFingers[0] = new TitanFingers(0.0f, palmY + randomY, intensity, (int)(5 * speedMultiplier), 1, scale, randomTime);
+            randomY = (float)(Math.random() * 6.0f) * scale;
+            titanFingers[1] = new TitanFingers(Game.getWindowWidth() - 250.0f, palmY + randomY, intensity, (int)(5 * speedMultiplier), -1, scale, randomTime);
+            objectManager.addBullet(titanFingers[0]);
+            objectManager.addBullet(titanFingers[1]);
+        }
+    }
+
+    @Override
+    public void moveBattleFrame(float deltaTime) {
+        uiManager.moveBattleFrame(deltaTime, frameMoveTime, edge, edge, centerX - edge / 2, centerY + edge / 2);
+    }
+
+    @Override
+    public void render() {}
+}

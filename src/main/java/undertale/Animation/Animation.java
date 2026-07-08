@@ -1,0 +1,174 @@
+package undertale.Animation;
+
+import java.util.ArrayList;
+import java.util.function.Consumer;
+
+import undertale.Texture.Texture;
+import undertale.Texture.TextureBuilder;
+
+public class Animation {
+    private int frameCount;
+    private int currentFrame;
+    private float frameDuration; // 每帧时长
+    private float elapsedTime; // 帧间隔时间
+    private boolean loop;
+    private boolean isEnd;
+    public boolean disappearAfterEnds;
+    private boolean horizontalReverse;
+    private boolean verticalReverse;
+
+    private ArrayList<Texture> frames;
+
+    public Animation(float frameDuration, boolean loop, ArrayList<Texture> frames, boolean horizontalReverse, boolean verticalReverse) {
+        this.frameDuration = frameDuration;
+        this.loop = loop;
+        this.isEnd = false;
+        this.disappearAfterEnds = false;
+        this.frames = frames;
+        this.currentFrame = 0;
+        this.elapsedTime = 0.0f;
+        this.horizontalReverse = horizontalReverse;
+        this.verticalReverse = verticalReverse;
+        this.frameCount = frames.size();
+    }
+
+    public Animation(float frameDuration, boolean loop, ArrayList<Texture> frames) {
+        this(frameDuration, loop, frames, false, false);
+    }
+
+    public Animation(float frameDuration, boolean loop, Texture... frames) {
+        this(frameDuration, loop, new ArrayList<Texture>(), false, false);
+        for (Texture frame : frames) {
+            addFrame(frame);
+        }
+    }
+
+    public Animation(float frameDuration, boolean loop, boolean horizontalReverse, boolean verticalReverse, Texture... frames) {
+        this(frameDuration, loop, new ArrayList<Texture>(), horizontalReverse, verticalReverse);
+        for (Texture frame : frames) {
+            addFrame(frame);
+        }
+    }
+
+    public Animation(float frameDuration, boolean loop) {
+        this(frameDuration, loop, new ArrayList<Texture>(), false, false);
+    }
+
+    public Texture getCurrentFrame() {
+        if (frameCount == 0) return null;
+        return frames.get(currentFrame);
+    }
+
+    public int getCurrentFrameIndex() {
+        return currentFrame;
+    }
+
+    public void setCurrentFrame(int index) {
+        if (index >= 0 && index < frameCount) {
+            currentFrame = index;
+            elapsedTime = 0.0f; // Reset elapsed time when manually setting frame
+            isEnd = false;
+        }
+    }
+
+    public void addFrame(Texture frame) {
+        frames.add(frame);
+        frameCount++;
+    }
+
+    public void updateAnimation(float deltaTime) {
+        if (frameCount == 0) return;
+
+        elapsedTime += deltaTime;
+        if (elapsedTime >= frameDuration) {
+            elapsedTime -= frameDuration;
+            currentFrame++;
+            if (currentFrame >= frameCount) {
+                if (loop) {
+                    currentFrame = 0;
+                } else {
+                    currentFrame = frameCount - 1; // Stay on the last frame
+                }
+            }
+        }
+    }
+
+    public float getFrameWidth() {
+        if (frameCount == 0) return 0;
+        return frames.get(0).getWidth();
+    }
+
+    public float getFrameHeight() {
+        if (frameCount == 0) return 0;
+        return frames.get(0).getHeight();
+    }
+
+    public void renderCurrentFrame(float x, float y, float scaleX, float scaleY, float angle, float r, float g, float b, float a, String shaderName, Consumer<Integer> uniformSetter) {
+        if(isEnd && disappearAfterEnds) return;
+        Texture currentTexture = getCurrentFrame();
+        if (currentTexture != null) {
+            float currentWidth = scaleX * currentTexture.getWidth();
+            float currentHeight = scaleY * currentTexture.getHeight();
+            float u0 = horizontalReverse ? 1.0f : 0.0f;
+            float v0 = verticalReverse ? 0.0f : 1.0f;
+
+            TextureBuilder builder = new TextureBuilder().textureId(currentTexture.getId())
+                .position(x, y)
+                .size(currentWidth, currentHeight)
+                .rotation(angle)
+                .rgba(r, g, b, a)
+                .uv(u0, 1 - u0, v0, 1 - v0);
+            if(shaderName != null) {
+                builder.shaderName(shaderName).uniformSetter(uniformSetter);
+            }
+            builder.draw();
+            if (!loop && currentFrame == frameCount - 1) {
+                isEnd = true;
+            } else {
+                isEnd = false;
+            }
+        }
+    }
+
+    public boolean isFinished() {
+        return isEnd;
+    }
+    
+    public float getFrameDuration() {
+        return frameDuration;
+    }
+
+    public boolean isLoop() {
+        return loop;
+    }
+
+    public ArrayList<Texture> getFrames() {
+        return new ArrayList<>(frames); // 返回副本避免修改
+    }
+    
+    public void reset() {
+        this.currentFrame = 0;
+        this.elapsedTime = 0.0f;
+        this.isEnd = false;
+    }
+
+    public void setHorizontalReverse(boolean horizontalReverse) {
+        this.horizontalReverse = horizontalReverse;
+    }
+
+    public void setVerticalReverse(boolean verticalReverse) {
+        this.verticalReverse = verticalReverse;
+    }
+
+    public void setInterval(float interval) {
+        this.frameDuration = interval;
+    } 
+
+    public int getFrameCount() {
+        return frameCount;
+    }
+
+    public float getTotalDuration() {
+        return frameDuration * frameCount;
+    }
+}

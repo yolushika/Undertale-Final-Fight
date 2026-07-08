@@ -1,0 +1,251 @@
+package undertale.GameObject.Bullets;
+
+import static org.lwjgl.opengl.GL20.*;
+
+import undertale.Animation.Animation;
+import undertale.Animation.AnimationBuilder;
+import undertale.Utils.GameUtilities;
+import undertale.Utils.DifficultyManager;
+import undertale.GameMain.Game;
+import undertale.GameObject.CollisionDetector;
+import undertale.GameObject.Player;
+import undertale.GameObject.Collectables.TensionPoint;
+import undertale.GameObject.Effects.TitanSpawnParticle;
+
+public class TitanSpawn extends Bullet{
+    private float maxSpeed;
+
+    private float cycleTimerSec = 0f;
+    // 接触光圈缩小相关变量
+    private float contactTimer = 0f; // seconds
+    private float contactDisapperTime; // seconds
+    private boolean contacting = false;
+    private boolean markedForRemoval = false;
+    private boolean noTP = false;
+    private float initialHScale;
+    private float initialVScale;
+
+    private float cycleDuration = 2.5f; // 每个周期持续时间
+    private float speedDuration = 2.0f; // 速度变化持续时间
+    
+    private final float MIN_VISIBLE_SCALE = 0.35f;
+
+    // 粒子生成
+    private float particleSpawnTimer = 0.0f;
+    private float particleSpawnInterval = 0.3f;
+
+    public TitanSpawn(float x, float y, float maxSpeed, float contactDisapperTime, int damage, Animation animation) {
+        super(x, y, 0, 0, 0, damage, animation);
+        setNavi(false);
+        this.destroyableOnHit = false;
+        this.maxSpeed = maxSpeed;
+        this.contactDisapperTime = contactDisapperTime;
+        this.bound = false;
+        // 创建动画副本，避免多个实例共享同一个动画状态
+        this.animation = new Animation(animation.getFrameDuration(), animation.isLoop(), animation.getFrames());
+
+        this.rgba[3] = 0.0f; // 初始透明
+        this.isColli = false; // 初始无判定
+        this.initialHScale = getHScale();
+        this.initialVScale = getVScale();
+        setHScale(0.0f);
+        setVScale(0.0f);
+    }
+
+    public TitanSpawn(float x, float y, float maxSpeed, int damage, Animation animation) {
+        this(x, y, maxSpeed, 1.0f, damage, animation);
+    }
+    private void updateCurrentSpeed(float deltaTime) {
+        // 每cycleDuration秒: 周期开始瞄准玩家
+        // 前speedDuration秒速度按 sin 包络上升再下降, 之后速度为0
+        cycleTimerSec += deltaTime;
+        if (cycleTimerSec >= cycleDuration) {
+            cycleTimerSec -= cycleDuration;
+        }
+
+        // 速度包络:0~speedDuration秒为 maxSpeed * sin(pi * t / speedDuration), speedDuration~cycleDuration秒为0
+        float t = cycleTimerSec;
+        float speed;
+        if (t < speedDuration) {
+            speed = (float)(maxSpeed * Math.sin(Math.PI * (t / speedDuration)));
+        } else {
+            speed = 0.0f;
+        }
+        if (speed < 0.0f) speed = 0.0f;
+        if (speed > maxSpeed) speed = maxSpeed;
+        this.setSpeed(speed);
+    }
+
+    @Override
+    public void update(float deltaTime) {
+        // speed angle始终朝向player
+        Player player = Game.getPlayer();
+        if (player != null) {
+            float dx = player.getX() + player.getWidth() / 2.0f - (this.getX() + this.getWidth() / 2.0f);
+            float dy = player.getY() + player.getHeight() / 2.0f - (this.getY() + this.getHeight() / 2.0f);
+            float angleDeg = (float)Math.toDegrees(Math.atan2(dy, dx));
+            this.setSpeedAngle(angleDeg);
+        }
+
+        // 在1秒内, alpha从0增加到1, scale从0增加到initialScale
+        if (rgba[3] < 1.0f) {
+            rgba[3] += GameUtilities.getChangeStep(0.0f, 1.0f, deltaTime, 1.0f).floatValue();
+            if (rgba[3] > 1.0f) {
+                rgba[3] = 1.0f;
+            }
+            float t = rgba[3];
+            setHScale(initialHScale * t);
+            setVScale(initialVScale * t);
+        } else {
+            // 完全显现, 恢复判定
+            if(!this.isColli){
+                this.isColli = true;
+            }
+            updateCurrentSpeed(deltaTime);
+        }
+        super.update(deltaTime);
+
+
+        // 如果已经标记为删除则直接返回
+        if (markedForRemoval) return;
+
+        // 检测是否与player任意光圈环接触（renderLight绘制了多圈）
+        if (player != null && player.isAlive() && this.isColli) {
+            float px = player.getX() + player.getWidth() / 2.0f;
+            float py = player.getY() + player.getHeight() / 2.0f;
+            float dx = px - (this.x + this.getWidth() / 2.0f);
+            float dy = py - (this.y + this.getHeight() / 2.0f);
+            float dist = (float)Math.sqrt(dx * dx + dy * dy);
+
+            float outer = player.getCurrentLightRadius();
+            float amp = player.getLightOscAmplitude();
+
+            boolean touch = false;
+            float halfSize = Math.max(this.getHeight(), this.getWidth()) / 2.0f;
+
+            // player与titan_spawn的中心距离 <= 外光圈半径 + 震动幅度 + titan_spawn半径
+            if (dist <= outer + amp + halfSize) {
+                touch = true;
+            }
+
+            if (touch) {
+                contactTimer += deltaTime;
+                contacting = true;
+            } else {
+                contacting = false;
+            }
+
+            // 接触光圈时缩小
+            if (contacting) {
+                spawnParticle(deltaTime, player);
+            }
+        }
+    }
+
+    private void spawnParticle(float deltaTime, Player player) {
+        // 生成粒子
+        particleSpawnTimer += deltaTime;
+        if (particleSpawnTimer >= particleSpawnInterval) {
+            particleSpawnTimer -= particleSpawnInterval;
+            // 计算远离 player 的边缘位置
+            float ppx = player.getX() + player.getWidth() / 2.0f;
+            float ppy = player.getY() + player.getHeight() / 2.0f;
+            float cx = this.x + this.getWidth() / 2.0f;
+            float cy = this.y + this.getHeight() / 2.0f;
+            float ddx = cx - ppx;
+            float ddy = cy - ppy;
+            float distance = (float) Math.sqrt(ddx * ddx + ddy * ddy);
+            if (distance > 0) {
+                // 远离方向
+                float dirX = ddx / distance;
+                float dirY = ddy / distance;
+                float awayAngle = (float) Math.toDegrees(Math.atan2(ddy, ddx));
+                // 随机角度偏移 +-10度
+                float randomOffset = (float) ((Math.random() - 0.5) * 20);
+                float spawnAngle = awayAngle + randomOffset;
+                // 随机距离从中心到边缘
+                float halfW = this.getWidth() / 2.0f;
+                float halfH = this.getHeight() / 2.0f;
+                float randomDist = (float) Math.random() * Math.max(halfW, halfH);
+                float spawnX = cx - dirX * randomDist;
+                float spawnY = cy - dirY * randomDist;
+                // 确保在边界内
+                spawnX = Math.max(cx - halfW, Math.min(cx + halfW, spawnX));
+                spawnY = Math.max(cy - halfH, Math.min(cy + halfH, spawnY));
+                // 创建粒子
+                TitanSpawnParticle particle = new TitanSpawnParticle(spawnX, spawnY, spawnAngle);
+                Game.getObjectManager().addTitanSpawnParticle(particle);
+            }
+        }
+ 
+        float t = Math.min(1.0f, contactTimer / contactDisapperTime);
+        // 不将scale降为0, 保留最小可见比例以保持良好体验
+        float scale = Math.max(MIN_VISIBLE_SCALE, 1.0f - t);
+        setHScale(initialHScale * scale);
+        setVScale(initialVScale * scale);
+        // 接触超过contactDisapperTime后消失
+        if (Math.abs(scale - MIN_VISIBLE_SCALE) < 0.01f) {
+            this.rgba[3] = 0.0f;
+            this.isColli = false;
+            markedForRemoval = true;
+            // 创建一个tension point
+            if (!noTP) {
+                float tpGainMultiplier = DifficultyManager.getInstance().getTpGainMultiplier();
+                int tpValue = Math.max(1, (int)(1.0f * tpGainMultiplier));
+                TensionPoint tp = new TensionPoint(this.x + this.getWidth() / 2.0f, this.y + this.getHeight() / 2.0f, 1.6f, tpValue);
+                Game.getObjectManager().addCollectable(tp);
+            }
+        }
+    }
+    
+    @Override
+    public void render() {
+        String shaderName = (rgba[3] < 1.0f) ? "texture_shader" : "titan_spawn_shader";
+        new AnimationBuilder(animation)
+            .position(this.x, this.y)
+            .scale(getHScale(), getVScale())
+            .rgba(rgba[0], rgba[1], rgba[2], rgba[3])
+            .rotation(this.getSelfAngle())
+            .shaderName(shaderName)
+            .uniformSetter(program -> {
+                int locScreenSize = glGetUniformLocation(program, "uScreenSize");
+                int locColor = glGetUniformLocation(program, "uColor");
+                int locTexture = glGetUniformLocation(program, "uTexture");
+                glUniform2i(locScreenSize, Game.getWindowWidth(), Game.getWindowHeight());
+                glUniform4f(locColor, rgba[0], rgba[1], rgba[2], rgba[3]);
+                glUniform1i(locTexture, 0);
+                if (shaderName.equals("titan_spawn_shader")) {
+                    int locScale = glGetUniformLocation(program, "uScale");
+                    glUniform1f(locScale, (getHScale() + getVScale()) / 2.0f);
+                }
+            })
+            .draw();
+    }
+
+    @Override
+    public float getWidth() {
+        return animation.getFrameWidth() * getHScale();
+    }
+
+    public float getHeight() {
+        return animation.getFrameHeight() * getVScale();
+    }
+
+    public boolean isMarkedForRemoval() {
+        return markedForRemoval;
+    }
+
+    public void markForRemovalWithoutTP() {
+        markedForRemoval = true;
+        noTP = true;
+    }
+
+    @Override
+    public boolean checkCollisionWithPlayer(Player player) {
+        if (!player.isAlive() || !this.isColli) {
+            return false;
+        }
+        float padding = -Math.min(getWidth(), getHeight()) / 3.0f;
+        return CollisionDetector.checkCircleCollision(this, player, padding);
+    }
+}

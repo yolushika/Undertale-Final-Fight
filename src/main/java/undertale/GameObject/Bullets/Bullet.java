@@ -1,0 +1,192 @@
+package undertale.GameObject.Bullets;
+
+import undertale.Animation.Animation;
+import undertale.GameObject.CollisionDetector;
+import undertale.GameObject.GameObject;
+import undertale.GameObject.Player;
+import undertale.Texture.Texture;
+import undertale.Texture.TextureBuilder;
+
+/**
+ * 子弹类型（叶子节点） — 作为组合结构中的叶子实现。
+ * 已重构说明（Refactor note）: Bullet 继承自 GameObject 并承担自身的 update()/render()，
+ * 可被添加到 bulletsLayer（GameObjectComposite）进行统一管理。
+ */
+public class Bullet extends GameObject{
+    protected static int nextId = 0;
+    protected int id;
+    protected int damage;
+    protected float hScale;
+    protected float vScale;
+    protected float[] rgba;
+    public boolean bound;
+    public boolean destroyableOnHit;
+    protected Texture texture;
+    protected Animation animation;
+
+
+    public Bullet(float x, float y, float selfAngle, float speedAngle, float speed, int damage, Texture texture) {
+        this.id = nextId++;
+        this.rgba = new float[]{1.0f, 1.0f, 1.0f, 1.0f}; // 默认白色不透明
+        this.x = x;
+        this.y = y;
+        setSelfAngle(selfAngle);
+        setSpeedAngle(speedAngle);
+        this.setSpeed(speed);
+        this.damage = damage;
+        this.texture = texture;
+        this.animation = null;
+        this.hScale = 1.0f;
+        this.vScale = 1.0f;
+        this.bound = true;
+        this.destroyableOnHit = true;
+        this.isColli = true;
+    }
+
+    public Bullet(float x, float y, float selfAngle, float speedAngle, float speed, int damage, Animation animation) {
+        this.id = nextId++;
+        this.rgba = new float[]{1.0f, 1.0f, 1.0f, 1.0f}; // 默认白色不透明
+        this.x = x;
+        this.y = y;
+        setSelfAngle(selfAngle);
+        setSpeedAngle(speedAngle);
+        this.setSpeed(speed);
+        this.damage = damage;
+        this.texture = null;
+        this.animation = animation;
+        this.hScale = 1.0f;
+        this.vScale = 1.0f;
+        this.bound = true;
+        this.destroyableOnHit = true;
+    }
+
+    @Override
+    public void update(float deltaTime) {
+        updatePosition(deltaTime);
+        if (animation != null) {
+            animation.updateAnimation(deltaTime);
+        }
+    }
+
+    public void setColor(float r, float g, float b, float a) {
+        this.rgba[0] = r;
+        this.rgba[1] = g;
+        this.rgba[2] = b;
+        this.rgba[3] = a;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public void render(){
+        Texture currentTexture = getCurrentTexture();
+        if (currentTexture != null) {
+            new TextureBuilder().textureId(currentTexture.getId())
+                .position(this.x, this.y)
+                .size(hScale * currentTexture.getWidth(), vScale * currentTexture.getHeight())
+                .rotation(getSelfAngle())
+                .rgba(rgba[0], rgba[1], rgba[2], rgba[3])
+                .draw();
+        }
+    }
+
+    public Texture getCurrentTexture() {
+        if (animation != null) {
+            return animation.getCurrentFrame();
+        }
+        return texture;
+    }
+
+    public int getDamage() {
+        return damage;
+    }
+
+    public Animation getAnimation() {
+        return animation;
+    }
+
+    public void setDamage(int damage) {
+        this.damage = damage;
+    }
+
+    public Texture getTexture() {
+        return texture;
+    }
+
+    public float getHScale() {
+        return hScale;
+    }
+
+    public void setHScale(float hScale) {
+        // 调整x以保持中心位置不变
+        this.x -= (hScale - this.hScale) * getWidth() / 2.0f;
+        this.hScale = hScale;
+    }
+
+    public float getVScale() {
+        return vScale;
+    }
+
+    public void setVScale(float vScale) {
+        // 调整y以保持中心位置不变
+        this.y -= (vScale - this.vScale) * getHeight() / 2.0f;
+        this.vScale = vScale;
+    }
+
+    @Override
+    public float getWidth() {
+        Texture currentTexture = getCurrentTexture();
+        return currentTexture != null ? hScale * currentTexture.getWidth() : 0;
+    }
+
+    @Override
+    public float getHeight() {
+        Texture currentTexture = getCurrentTexture();
+        return currentTexture != null ? vScale * currentTexture.getHeight() : 0;
+    }
+
+    public void reset(float x, float y, float selfAngle, float speedAngle, float speed, int damage, Texture texture) {
+        this.rgba = new float[]{1.0f, 1.0f, 1.0f, 1.0f}; // 默认白色不透明
+        this.x = x;
+        this.y = y;
+        setSelfAngle(selfAngle);
+        setSpeedAngle(speedAngle);
+        this.setSpeed(speed);
+        this.damage = damage;
+        this.texture = texture;
+        this.animation = null;
+        this.hScale = 1.0f;
+        this.vScale = 1.0f;
+        this.destroyableOnHit = true;
+        this.bound = true;
+    }
+
+    public void reset(float x, float y, float selfAngle, float speedAngle, float speed, int damage, Animation animation) {
+        this.rgba = new float[]{1.0f, 1.0f, 1.0f, 1.0f}; // 默认白色不透明
+        this.x = x;
+        this.y = y;
+        setSelfAngle(selfAngle);
+        setSpeedAngle(speedAngle);
+        this.setSpeed(speed);
+        this.damage = damage;
+        this.texture = null;
+        this.animation = animation;
+        this.hScale = 1.0f;
+        this.vScale = 1.0f;
+        this.destroyableOnHit = true;
+        this.bound = true;
+    }
+
+    public boolean checkCollisionWithPlayer(Player player) {
+        if (!player.isAlive() || !this.isColli) {
+            return false;
+        }
+        float padding = - Math.max(this.getWidth(), this.getHeight()) / 4.0f;
+        return CollisionDetector.checkCircleCollision(this, player, padding);
+    }
+
+    public boolean hasAnimation() {
+        return animation != null;
+    }
+}

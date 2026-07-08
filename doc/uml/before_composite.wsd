@@ -1,0 +1,42 @@
+@startuml
+
+class ObjectManager {
+  - List<Bullet> bullets
+  - List<Collectable> collectables
+  + updateFightScene()
+  + renderFightScene()
+}
+
+class BulletRenderer {
+  + renderAll(List<Bullet>)
+}
+
+class CollectableRenderer {
+  + renderAll(List<Collectable>)
+}
+
+class Bullet {
+  + update()
+  + getTexture()
+}
+
+class Collectable {
+  + update()
+  + getTexture()
+}
+
+ObjectManager --> BulletRenderer : uses
+ObjectManager --> CollectableRenderer : uses
+ObjectManager --> Bullet : contains >
+ObjectManager --> Collectable : contains >
+
+BulletRenderer --> Bullet : read
+CollectableRenderer --> Collectable : read
+
+note right of ObjectManager
+  - Multiple activity lists
+  - Rendering responsibilities are centralized
+  - Testing and scalability are limited
+end note
+
+@enduml
