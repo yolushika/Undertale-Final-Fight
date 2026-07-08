@@ -74,7 +74,7 @@ atives-windows）
 
 `ash
 # 1. 克隆仓库
-git clone https://github.com/yolushika/java-undertale.git
+git clone https://github.com/yolushika/Undertale-Final-Fight.git
 cd java-undertale
 
 # 2. 编译打包（自动生成 exe / jar / 依赖）
@@ -148,4 +148,5 @@ java -jar target/undertale-1.0-SNAPSHOT.jar          # JAR 运行
 ## 👤 作者
 
 - **GitHub**：[yolushika](https://github.com/yolushika)
-- **项目链接**：[https://github.com/yolushika/java-undertale](https://github.com/yolushika/java-undertale)
+- **项目链接**：[https://github.com/yolushika/java-undertale](https://github.com/yolushika/Undertale-Final-Fight)
+
